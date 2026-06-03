@@ -151,8 +151,8 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
       <div class="grid-2">
         <div class="field"><label>Fecha distracto</label><input type="date" id="ar-distracto" oninput="calcAct('ripte')"></div>
         <div class="field"><label>Fecha liquidación</label><input type="date" id="ar-liquidacion" oninput="calcAct('ripte')"></div>
-        <div class="field"><label>Capital ($)</label><input type="number" id="ar-capital" placeholder="0.00" min="0" step="0.01" oninput="calcAct('ripte')"></div>
-        <div class="field"><label>Tasa de interés anual (%)</label><input type="number" id="ar-tasa" placeholder="Ej: 6" min="0" step="0.01" oninput="calcAct('ripte')"></div>
+        <div class="field"><label>Capital ($)</label><input type="text" id="ar-capital" placeholder="Ej: 1.775.664,12" oninput="calcAct('ripte')"></div>
+        <div class="field"><label>Tasa de interés anual (%)</label><input type="text" id="ar-tasa" placeholder="Ej: 6 o 6,5" oninput="calcAct('ripte')"></div>
       </div>
       <div class="info-bar" id="ar-infobar" style="display:none">
         <div class="info-item">RIPTE distracto: <b id="ar-rd">—</b></div>
@@ -179,8 +179,8 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
       <div class="grid-2">
         <div class="field"><label>Fecha distracto</label><input type="date" id="ai-distracto" oninput="calcAct('ipc')"></div>
         <div class="field"><label>Fecha liquidación</label><input type="date" id="ai-liquidacion" oninput="calcAct('ipc')"></div>
-        <div class="field"><label>Capital ($)</label><input type="number" id="ai-capital" placeholder="0.00" min="0" step="0.01" oninput="calcAct('ipc')"></div>
-        <div class="field"><label>Tasa de interés anual (%)</label><input type="number" id="ai-tasa" placeholder="Ej: 6" min="0" step="0.01" oninput="calcAct('ipc')"></div>
+        <div class="field"><label>Capital ($)</label><input type="text" id="ai-capital" placeholder="Ej: 1.775.664,12" oninput="calcAct('ipc')"></div>
+        <div class="field"><label>Tasa de interés anual (%)</label><input type="text" id="ai-tasa" placeholder="Ej: 6 o 6,5" oninput="calcAct('ipc')"></div>
       </div>
       <div class="info-bar" id="ai-infobar" style="display:none">
         <div class="info-item">IPC distracto: <b id="ai-id">—</b></div>
@@ -485,7 +485,7 @@ function renderIBM(mode) {
     var key = r.y+'-'+r.m;
     var prevVal = prevSueldos[key] !== undefined ? prevSueldos[key]
                   : (ibmSueldos[mode][key] !== undefined ? ibmSueldos[mode][key] : '');
-    var sueldo = parseFloat(prevVal) || 0;
+    var sueldo = parseMonto(prevVal);
     var act = (coef && sueldo>0) ? coef*sueldo : null;
     if (act) sumaAct += act;
 
@@ -494,7 +494,7 @@ function renderIBM(mode) {
       '<td style="font-weight:500;color:#1a1a18">'+fmtMes(r.y,r.m)+'</td>'
       +'<td>'+(rv?fmtN(rv,2):'<span style="color:#d3d1c7">N/D</span>')+'</td>'
       +'<td>'+(coef?fmtN(coef,6):'<span style="color:#d3d1c7">N/D</span>')+'</td>'
-      +'<td><input class="sueldo-input" type="number" min="0" step="0.01" placeholder="0.00" data-mode="'+mode+'" data-key="'+key+'" value="'+(prevVal||'')+'" autocomplete="off"></td>'
+      +'<td><input class="sueldo-input" type="text" inputmode="decimal" placeholder="Ej: 1.250.000,00" data-mode="'+mode+'" data-key="'+key+'" value="'+(prevVal||'')+'" autocomplete="off"></td>'
       +'<td>'+(act?fmt(act):'<span style="color:#d3d1c7">—</span>')+'</td>';
     tbody.appendChild(tr);
   });
@@ -502,7 +502,7 @@ function renderIBM(mode) {
   // Adjuntar listeners sin perder foco
   tbody.querySelectorAll('.sueldo-input').forEach(function(inp){
     inp.addEventListener('input', function(){
-      ibmSueldos[inp.dataset.mode][inp.dataset.key] = parseFloat(inp.value)||0;
+      ibmSueldos[inp.dataset.mode][inp.dataset.key] = parseMonto(inp.value);
       updateIBMTotals(mode, ripteAnchor, rows);
     });
   });
@@ -523,7 +523,7 @@ function updateIBMTotals(mode, ripteAnchor, rows) {
     var rv = lookup(ripteData, r.y, r.m);
     var coef = (ripteAnchor && rv) ? ripteAnchor/rv : null;
     var key = r.y+'-'+r.m;
-    var sueldo = parseFloat(ibmSueldos[mode][key]) || 0;
+    var sueldo = parseMonto(ibmSueldos[mode][key]) || 0;
     var act = (coef && sueldo>0) ? coef*sueldo : null;
     if (act) suma += act;
     tr.cells[4].innerHTML = act ? fmt(act) : '<span style="color:#d3d1c7">—</span>';
@@ -532,14 +532,29 @@ function updateIBMTotals(mode, ripteAnchor, rows) {
 }
 
 // ── ACTUALIZAR ────────────────────────────────────────────────────────────────
+// Acepta formatos argentinos: "1.775.664,12" o "1775664,12" o "1775664.12"
+function parseMonto(str) {
+  if (!str) return 0;
+  var s = String(str).trim();
+  // Si tiene coma: quitar puntos de miles, reemplazar coma decimal por punto
+  if (s.indexOf(',') >= 0) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  }
+  // Si no tiene coma pero sí puntos: podría ser miles (1.775.664) o decimal (1775.12)
+  // Si hay más de un punto, son separadores de miles
+  var dotCount = (s.match(/\./g)||[]).length;
+  if (dotCount > 1) s = s.replace(/\./g, '');
+  return parseFloat(s) || 0;
+}
+
 function calcAct(type) {
   var px = type==='ripte'?'ar':'ai';
   var data = type==='ripte'?ripteData:ipcData;
 
   var dStr = document.getElementById(px+'-distracto').value;
   var lStr = document.getElementById(px+'-liquidacion').value;
-  var capital = parseFloat(document.getElementById(px+'-capital').value)||0;
-  var tasa = parseFloat(document.getElementById(px+'-tasa').value)||0;
+  var capital = parseMonto(document.getElementById(px+'-capital').value);
+  var tasa = parseMonto(document.getElementById(px+'-tasa').value);
 
   if (!dStr||!lStr) return;
 
