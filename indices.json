@@ -1,6 +1,6 @@
 {
   "_instrucciones": "Para agregar un mes nuevo: copiá la última línea de la sección y cambiá la fecha (formato AAAA-MM) y el valor. La fecha va entre comillas. Guardá con commit. RIPTE es el nivel del índice (columna 'IB 07/1994 = 100'). IPC es el nivel del índice base diciembre-2016=100.",
-  "actualizado": "2026-03",
+  "actualizado": "2026-04",
   "ripte": {
     "2011-01": 449.82,
     "2011-02": 459.18,
