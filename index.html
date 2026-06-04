@@ -95,7 +95,7 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
     <button class="tab active" onclick="switchTab('ibm',this)">IBM</button>
     <button class="tab" onclick="switchTab('ibm-dnu',this)">IBM (DNU)</button>
     <button class="tab" onclick="switchTab('act-ripte',this)">Actualizar RIPTE</button>
-    <button class="tab" onclick="switchTab('act-ipc',this)">Actualizar IPC</button>
+    <button class="tab" onclick="switchTab('act-ipc',this)">Art. 55 Ley 27.802</button>
     <button class="tab" onclick="switchTab('indices',this)">Índices</button>
   </div>
 
@@ -171,31 +171,38 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
     </div>
   </div>
 
-  <!-- ── ACTUALIZA IPC ── -->
+  <!-- ── ART. 55 LEY 27.802 ── -->
   <div id="panel-act-ipc" class="panel">
     <div class="card">
-      <p class="section-label">Datos</p>
+      <p class="section-label">Datos — Art. 55 Ley 27.802</p>
       <div class="grid-2">
-        <div class="field"><label>Fecha distracto</label><input type="date" id="ai-distracto" oninput="calcAct('ipc')"></div>
-        <div class="field"><label>Fecha liquidación</label><input type="date" id="ai-liquidacion" oninput="calcAct('ipc')"></div>
-        <div class="field"><label>Capital ($)</label><input type="text" id="ai-capital" placeholder="Ej: 1.775.664,12" oninput="calcAct('ipc')"></div>
-        <div class="field"><label>Tasa de interés anual (%)</label><input type="text" id="ai-tasa" placeholder="Ej: 6 o 6,5" oninput="calcAct('ipc')"></div>
+        <div class="field"><label>Fecha distracto</label><input type="date" id="ai-distracto" oninput="calcArt55()"></div>
+        <div class="field"><label>Fecha liquidación</label><input type="date" id="ai-liquidacion" oninput="calcArt55()"></div>
+        <div class="field"><label>Capital ($)</label><input type="text" id="ai-capital" placeholder="Ej: 1.775.664,12" oninput="calcArt55()"></div>
+        <div class="field"><label>Estado índices <span class="badge" id="tp-idx-badge">—</span></label><input type="text" id="tp-idx-status" readonly placeholder="Tocá Actualizar para cargar"></div>
       </div>
-      <div class="info-bar" id="ai-infobar" style="display:none">
+      <div class="info-bar" id="ai-infobar" style="display:none;flex-wrap:wrap;gap:14px">
         <div class="info-item">IPC distracto: <b id="ai-id">—</b></div>
         <div class="info-item">IPC vigente: <b id="ai-iv">—</b></div>
-        <div class="info-item">Coeficiente: <b id="ai-coef">—</b></div>
+        <div class="info-item">Coef. IPC: <b id="ai-coef">—</b></div>
         <div class="info-item">Días: <b id="ai-dias">—</b></div>
+        <div class="info-item">T₀ Com.14290: <b id="tp43-t0">—</b></div>
+        <div class="info-item">Tm Com.14290: <b id="tp43-tm">—</b></div>
+        <div class="info-item">T₀ Res.45/26: <b id="tp-t0">—</b></div>
+        <div class="info-item">Tm Res.45/26: <b id="tp-tm">—</b></div>
       </div>
     </div>
     <div class="card" id="ai-results" style="display:none">
-      <p class="section-label">Resultado</p>
+      <p class="section-label">Resultado — Art. 55 Ley 27.802</p>
       <div class="result-block">
-        <div class="result-row"><span>Capital actualizado</span><span class="rval" id="ai-capact">—</span></div>
-        <div class="result-row"><span>Intereses</span><span class="rval" id="ai-int">—</span></div>
-        <div class="result-row"><span>Piso Art. 55 (67%)</span><span class="rval" id="ai-piso">—</span></div>
-        <div class="result-row"><span>Capital + 70%</span><span class="rval" id="ai-cap70">—</span></div>
-        <div class="result-row total"><span>Capital + 100%</span><span class="rval" id="ai-cap100">—</span></div>
+        <div class="result-row" id="row-pasiva43"><span>Inc. a — Tasa pasiva Com. 14290 (CPACF / Justicia)</span><span class="rval" id="ai-pasiva43">—</span></div>
+        <div class="result-row" id="row-pasiva12"><span>Inc. a — Tasa pasiva Res. 45/26 BCRA (Ley 27.802)</span><span class="rval" id="ai-pasiva12">—</span></div>
+        <div class="result-row"><span>Inc. b — Techo (IPC + 3% anual s/ cap. actualizado)</span><span class="rval" id="ai-techo">—</span></div>
+        <div class="result-row"><span>Inc. c — Piso (67% del techo)</span><span class="rval" id="ai-piso">—</span></div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+        <div id="ai-veredicto43" style="padding:10px 13px;border-radius:8px;font-size:13px;font-weight:500"></div>
+        <div id="ai-veredicto12" style="padding:10px 13px;border-radius:8px;font-size:13px;font-weight:500"></div>
       </div>
     </div>
   </div>
@@ -593,9 +600,328 @@ function switchIdxTab(type, btn) {
   renderIdxTable(type);
 }
 
+// ── TASA PASIVA ID 43 — Com. 14290 (Uso de Justicia) ─────────────────────────
+// Índice acumulado directo desde la API — no requiere encadenamiento
+var tp43Cache = null; // objeto {"YYYY-MM-DD": valor}
+var tp43LastBuilt = null;
+
+function buildTp43Index(bcraData) {
+  var idx = {};
+  bcraData.forEach(function(r){ idx[r.fecha] = parseFloat(r.valor); });
+  var sorted = Object.keys(idx).sort();
+  if (sorted.length > 0) tp43LastBuilt = sorted[sorted.length-1];
+  tp43Cache = idx;
+  return idx;
+}
+
+function tp43Lookup(dateStr) {
+  if (!tp43Cache) return null;
+  if (tp43Cache[dateStr] != null) return tp43Cache[dateStr];
+  var d = parseLocalDate(dateStr);
+  for (var i=1; i<=10; i++) {
+    d.setDate(d.getDate()-1);
+    var k = tpDateKey(d);
+    if (tp43Cache[k] != null) return tp43Cache[k];
+  }
+  return null;
+}
+
+function fetchBCRAid43() {
+  var today = new Date();
+  var toStr = tpDateKey(today);
+  var url = 'https://api.bcra.gob.ar/estadisticas/v4.0/monetarias/43?desde=1993-06-01&hasta='+toStr+'&limit=3000';
+
+  function fetchPage(url, acc, offset) {
+    return fetch(url)
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){
+        var det = (j.results && j.results[0] && j.results[0].detalle) ? j.results[0].detalle : [];
+        acc = acc.concat(det);
+        var count = j.metadata && j.metadata.resultset ? j.metadata.resultset.count : det.length;
+        var limit = j.metadata && j.metadata.resultset ? j.metadata.resultset.limit : 3000;
+        var nextOff = offset + limit;
+        if (nextOff < count) {
+          var nextUrl = url.replace(/&offset=\d+/,'') + '&offset=' + nextOff;
+          return fetchPage(nextUrl, acc, nextOff);
+        }
+        return acc;
+      });
+  }
+
+  return fetchPage(url, [], 0)
+    .then(function(all) {
+      buildTp43Index(all);
+      try { localStorage.setItem('tp43_bcra_raw', JSON.stringify(all)); } catch(e){}
+      calcArt55();
+    })
+    .catch(function(e) {
+      try {
+        var stored = localStorage.getItem('tp43_bcra_raw');
+        if (stored) { buildTp43Index(JSON.parse(stored)); calcArt55(); }
+      } catch(ex){}
+    });
+}
+
+// ── TASA PASIVA BCRA — Art. 55 Ley 27.802 ────────────────────────────────────
+// Índice acumulado embebido desde 03/06/1993 hasta 31/07/1994
+// Formato: ["YYYY-MM-DD", valorIndice]
+// Fuente: Excel BCRA "Tasa Pasiva Ley 27.802 art. 55(a)", Base 3.6.93
+var TP_BASE_EMBEBIDO = [
+["1993-06-03",0.0266],["1993-06-04",0.0509],["1993-06-05",0.0758],["1993-06-06",0.1007],
+["1993-06-07",0.1256],["1993-06-08",0.1512],["1993-06-09",0.1781],["1993-06-10",0.2037],
+["1993-06-11",0.2300],["1993-06-12",0.2560]
+];
+// Punto de anclaje: 31/07/1994 = 10.3251
+// La serie completa se construye en runtime desde la API desde 01/08/1994
+var TP_ANCHOR_DATE = '1994-07-31';
+var TP_ANCHOR_VALUE = 10.3251;
+
+// Cache del índice reconstruido: objeto {"YYYY-MM-DD": valor}
+var tpIndexCache = null;
+var tpLastBuilt = null; // última fecha construida
+
+function tpDateKey(d) {
+  // d puede ser Date o string YYYY-MM-DD
+  if (typeof d === 'string') return d;
+  var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+dd;
+}
+
+function buildTpIndex(bcraData) {
+  // bcraData: array de {fecha, valor} de la API BCRA ID 12 (TNApf, días hábiles)
+  // Construir mapa de TNApf por fecha
+  var tnaMap = {};
+  bcraData.forEach(function(r){ tnaMap[r.fecha] = parseFloat(r.valor); });
+
+  var idx = {};
+
+  // Cargar índice embebido
+  TP_BASE_EMBEBIDO.forEach(function(r){ idx[r[0]] = r[1]; });
+
+  if (bcraData.length === 0) { tpIndexCache = idx; return idx; }
+
+  // Encadenar desde el día siguiente al ancla hasta el último día de la API
+  // Para cada día calendario, usar la TNApf del día o del último hábil anterior
+  var sorted = Object.keys(tnaMap).sort();
+  var lastApiDate = sorted[sorted.length-1];
+
+  var cur = new Date(TP_ANCHOR_DATE);
+  cur.setDate(cur.getDate()+1); // empezar desde 01/08/1994
+  var end = new Date(lastApiDate);
+
+  var prevIdx = TP_ANCHOR_VALUE;
+  var lastTna = null;
+
+  while (cur <= end) {
+    var key = tpDateKey(cur);
+    // Actualizar TNApf si hay dato para este día
+    if (tnaMap[key] != null) lastTna = tnaMap[key];
+    // Si no hay TNApf disponible todavía, saltar
+    if (lastTna === null) { cur.setDate(cur.getDate()+1); continue; }
+    // Encadenar
+    var ta = lastTna * 30 / 365;
+    var newVal = Math.pow(1 + ta/100, 1/30) * (100 + prevIdx) - 100;
+    newVal = Math.round(newVal * 100000) / 100000;
+    idx[key] = newVal;
+    prevIdx = newVal;
+    tpLastBuilt = key;
+    cur.setDate(cur.getDate()+1);
+  }
+
+  tpIndexCache = idx;
+  return idx;
+}
+
+function tpLookup(dateStr) {
+  // Busca el índice para una fecha; si no hay dato exacto, busca el día hábil anterior
+  if (!tpIndexCache) return null;
+  if (tpIndexCache[dateStr] != null) return tpIndexCache[dateStr];
+  // Buscar hacia atrás hasta 10 días (fines de semana y feriados)
+  var d = parseLocalDate(dateStr);
+  for (var i=1; i<=10; i++) {
+    d.setDate(d.getDate()-1);
+    var k = tpDateKey(d);
+    if (tpIndexCache[k] != null) return tpIndexCache[k];
+  }
+  return null;
+}
+
+function fetchBCRAid12() {
+  // Baja la serie completa de ID 12 desde 01/08/1994 hasta hoy en bloques de 3000
+  var bar = document.getElementById('tp-idx-status');
+  var badge = document.getElementById('tp-idx-badge');
+  if (bar) bar.value = 'Descargando serie del BCRA…';
+
+  var today = new Date();
+  var toStr = tpDateKey(today);
+  var url = 'https://api.bcra.gob.ar/estadisticas/v4.0/monetarias/12?desde=1994-08-01&hasta='+toStr+'&limit=3000';
+
+  function fetchPage(url, acc) {
+    return fetch(url)
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){
+        var det = (j.results && j.results[0] && j.results[0].detalle) ? j.results[0].detalle : [];
+        acc = acc.concat(det);
+        var count = j.metadata && j.metadata.resultset ? j.metadata.resultset.count : det.length;
+        var offset = j.metadata && j.metadata.resultset ? j.metadata.resultset.offset : 0;
+        var limit = j.metadata && j.metadata.resultset ? j.metadata.resultset.limit : 3000;
+        if (offset + limit < count) {
+          var nextUrl = url.replace(/&offset=\d+/,'') + '&offset=' + (offset+limit);
+          return fetchPage(nextUrl, acc);
+        }
+        return acc;
+      });
+  }
+
+  return fetchPage(url, [])
+    .then(function(all) {
+      buildTpIndex(all);
+      var lastDate = tpLastBuilt || TP_ANCHOR_DATE;
+      if (bar) bar.value = 'Índice construido hasta ' + lastDate;
+      if (badge) { badge.textContent = lastDate; badge.style.background='#eaf3de'; badge.style.color='#3b6d11'; }
+      // Recalcular si hay datos en pantalla
+      calcArt55();
+      // Guardar en localStorage para offline
+      try { localStorage.setItem('tp_bcra_raw', JSON.stringify(all)); localStorage.setItem('tp_built', lastDate); } catch(e){}
+    })
+    .catch(function(e) {
+      if (bar) bar.value = 'Sin conexión — usando datos guardados';
+      if (badge) { badge.textContent = 'offline'; badge.style.background='#fcebeb'; badge.style.color='#a32d2d'; }
+      // Intentar cargar desde localStorage
+      try {
+        var stored = localStorage.getItem('tp_bcra_raw');
+        if (stored) { buildTpIndex(JSON.parse(stored)); calcArt55(); }
+      } catch(ex){}
+    });
+}
+
+function calcArt55() {
+  var dStr = document.getElementById('ai-distracto').value;
+  var lStr = document.getElementById('ai-liquidacion').value;
+  var capital = parseMonto(document.getElementById('ai-capital').value);
+
+  if (!dStr || !lStr || !capital) { document.getElementById('ai-results').style.display='none'; return; }
+
+  var dDate = parseLocalDate(dStr);
+  var lDate = parseLocalDate(lStr);
+  var dias = Math.round((lDate - dDate) / (1000*60*60*24));
+  if (dias <= 0) { document.getElementById('ai-results').style.display='none'; return; }
+
+  // IPC
+  var dY = dDate.getFullYear(), dM = dDate.getMonth()+1;
+  var idxIpcD = lookup(ipcData, dY, dM);
+  var idxIpcV = lastVal(ipcData);
+  var leIpc = lastEntry(ipcData);
+
+  // T0 = día anterior al distracto, Tm = día de liquidación
+  var d0 = new Date(dDate); d0.setDate(d0.getDate()-1);
+  var d0Str = tpDateKey(d0);
+
+  // ID 43 (Com. 14290 — directo)
+  var t43_0 = tp43Cache ? tp43Lookup(d0Str) : null;
+  var t43_m = tp43Cache ? tp43Lookup(lStr) : null;
+
+  // ID 12 (Res. 45/26 — encadenado)
+  var t12_0 = tpIndexCache ? tpLookup(d0Str) : null;
+  var t12_m = tpIndexCache ? tpLookup(lStr) : null;
+
+  // Actualizar infobar
+  document.getElementById('ai-infobar').style.display = 'flex';
+  document.getElementById('ai-id').textContent = idxIpcD ? fmtN(idxIpcD,4) : 'Sin dato '+fmtMes(dY,dM);
+  document.getElementById('ai-iv').textContent = fmtN(idxIpcV,4)+' ('+fmtMes(leIpc[0],leIpc[1])+')';
+  document.getElementById('ai-coef').textContent = idxIpcD ? fmtN(idxIpcV/idxIpcD,6) : 'N/D';
+  document.getElementById('ai-dias').textContent = dias;
+  document.getElementById('tp43-t0').textContent = t43_0 != null ? fmtN(t43_0,4) : 'Sin dato';
+  document.getElementById('tp43-tm').textContent = t43_m != null ? fmtN(t43_m,4) : 'Sin dato';
+  document.getElementById('tp-t0').textContent = t12_0 != null ? fmtN(t12_0,4) : 'Sin dato';
+  document.getElementById('tp-tm').textContent = t12_m != null ? fmtN(t12_m,4) : 'Sin dato';
+
+  if (!idxIpcD) { document.getElementById('ai-results').style.display='none'; return; }
+
+  // Inc. b — Techo
+  var coefIpc = idxIpcV / idxIpcD;
+  var capAct = capital * coefIpc;
+  var techo = capAct * (1 + 0.03/365 * dias);
+  var piso = techo * 0.67;
+
+  document.getElementById('ai-results').style.display = 'block';
+  document.getElementById('ai-techo').textContent = fmt(techo);
+  document.getElementById('ai-piso').textContent = fmt(piso);
+
+  // Helper para mostrar cada serie
+  function mostrarSerie(pasiva, rowId, pasivaId, veredictoId, label) {
+    var row = document.getElementById(rowId);
+    document.getElementById(pasivaId).textContent = pasiva != null ? fmt(pasiva) : '—';
+    row.style.background = '';
+    var verd = document.getElementById(veredictoId);
+    if (pasiva === null) {
+      verd.textContent = label + ': índice no disponible — tocá Actualizar.';
+      verd.style.background = '#fcebeb'; verd.style.color = '#a32d2d';
+      return;
+    }
+    var resultado, msg, color;
+    if (pasiva > techo) {
+      resultado = techo; color = '#faeeda';
+      msg = label + ': '+fmt(pasiva)+' supera el techo. Se aplica Inc. b → '+fmt(techo);
+    } else if (pasiva < piso) {
+      resultado = piso; color = '#faeeda';
+      msg = label + ': '+fmt(pasiva)+' es inferior al piso. Se aplica Inc. c → '+fmt(piso);
+    } else {
+      resultado = pasiva; color = '#eaf3de';
+      row.style.background = '#eaf3de';
+      msg = label + ': dentro del rango. Se aplica Inc. a → '+fmt(pasiva);
+    }
+    verd.textContent = msg; verd.style.background = color; verd.style.color = '#1a1a18';
+  }
+
+  var pasiva43 = t43_0 != null && t43_m != null
+    ? capital * ((100 + t43_m) / (100 + t43_0))
+    : null;
+  var pasiva12 = t12_0 != null && t12_m != null
+    ? capital * ((100 + t12_m) / (100 + t12_0))
+    : null;
+
+  mostrarSerie(pasiva43, 'row-pasiva43', 'ai-pasiva43', 'ai-veredicto43', 'Com. 14290 (CPACF/Justicia)');
+  mostrarSerie(pasiva12, 'row-pasiva12', 'ai-pasiva12', 'ai-veredicto12', 'Res. 45/26 (Ley 27.802)');
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadData();
 fetchIndices();
+// Cargar índices tasa pasiva desde localStorage si existen
+try {
+  var stored12 = localStorage.getItem('tp_bcra_raw');
+  if (stored12) {
+    buildTpIndex(JSON.parse(stored12));
+    var bar = document.getElementById('tp-idx-status');
+    var badge = document.getElementById('tp-idx-badge');
+    var builtDate = localStorage.getItem('tp_built') || tpLastBuilt || '';
+    if (bar) bar.value = 'Índices guardados' + (builtDate ? ' hasta '+builtDate : '') + ' — tocá Actualizar para refrescar';
+    if (badge && builtDate) { badge.textContent = builtDate; badge.style.background='#f1efe8'; badge.style.color='#5f5e5a'; }
+  } else {
+    var bar2 = document.getElementById('tp-idx-status');
+    if (bar2) bar2.value = 'Sin datos — tocá Actualizar para cargar desde el BCRA';
+  }
+  var stored43 = localStorage.getItem('tp43_bcra_raw');
+  if (stored43) buildTp43Index(JSON.parse(stored43));
+} catch(e) {}
+
+// Sobreescribir fetchIndices para que también actualice ambas tasas pasivas
+var _origFetchIndices = fetchIndices;
+fetchIndices = function() {
+  _origFetchIndices();
+  var bar = document.getElementById('tp-idx-status');
+  var badge = document.getElementById('tp-idx-badge');
+  if (bar) bar.value = 'Descargando índices desde el BCRA…';
+  if (badge) { badge.textContent = 'descargando…'; badge.style.background='#f1efe8'; badge.style.color='#888780'; }
+  Promise.all([fetchBCRAid43(), fetchBCRAid12()])
+    .then(function() {
+      var last = tp43LastBuilt || tpLastBuilt || '';
+      if (bar) bar.value = 'Índices actualizados' + (last ? ' hasta '+last : '');
+      if (badge && last) { badge.textContent = last; badge.style.background='#eaf3de'; badge.style.color='#3b6d11'; }
+      try { localStorage.setItem('tp_built', tpLastBuilt||''); } catch(e){}
+    });
+};
 </script>
 </body>
 </html>
