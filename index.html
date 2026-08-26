@@ -162,12 +162,13 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
       </div>
     </div>
     <div class="card" id="ar-results" style="display:none">
-      <p class="section-label">Resultado</p>
+      <p class="section-label">Actualización por RIPTE</p>
       <div class="result-block">
-        <div class="result-row"><span>Capital actualizado</span><span class="rval" id="ar-capact">—</span></div>
-        <div class="result-row"><span>Intereses</span><span class="rval" id="ar-int">—</span></div>
+        <div class="result-row"><span>Capital</span><span class="rval" id="ar-cap-orig">—</span></div>
+        <div class="result-row"><span>Capital actualizado (RIPTE)</span><span class="rval" id="ar-capact">—</span></div>
+        <div class="result-row" id="row-ar-int" style="display:none"><span id="lbl-ar-int">Intereses</span><span class="rval" id="ar-int">—</span></div>
         <div class="result-row"><span>Capital + 70%</span><span class="rval" id="ar-cap70">—</span></div>
-        <div class="result-row total"><span>Capital + 100%</span><span class="rval" id="ar-cap100">—</span></div>
+        <div class="result-row total"><span id="lbl-ar-total">Total actualizado (RIPTE + interés)</span><span class="rval" id="ar-cap100">—</span></div>
       </div>
     </div>
   </div>
@@ -200,6 +201,7 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
         <div class="result-row"><span>Capital</span><span class="rval" id="ai-cap-orig">—</span></div>
         <div class="result-row"><span>Capital actualizado (IPC)</span><span class="rval" id="ai-capact">—</span></div>
         <div class="result-row" id="row-ai-int" style="display:none"><span id="lbl-ai-int">Intereses</span><span class="rval" id="ai-int">—</span></div>
+        <div class="result-row"><span>Capital + 70%</span><span class="rval" id="ai-cap70">—</span></div>
         <div class="result-row total"><span id="lbl-ai-total">Total actualizado (IPC)</span><span class="rval" id="ai-total">—</span></div>
       </div>
     </div>
@@ -622,10 +624,19 @@ function calcAct(type) {
   var cap70 = ((cap100-capital)*0.7)+capital;
 
   document.getElementById(px+'-results').style.display='block';
+  document.getElementById(px+'-cap-orig').textContent = fmt(capital);
   document.getElementById(px+'-capact').textContent = fmt(capAct);
-  document.getElementById(px+'-int').textContent = fmt(intereses);
+  var rowInt = document.getElementById('row-'+px+'-int');
+  if (tasa) {
+    document.getElementById('lbl-'+px+'-int').textContent = 'Intereses (' + fmtN(tasa,2) + '% anual s/ cap. actualizado)';
+    document.getElementById(px+'-int').textContent = fmt(intereses);
+    rowInt.style.display = '';
+  } else {
+    rowInt.style.display = 'none';
+  }
   if (type==='ipc') document.getElementById('ai-piso').textContent = fmt(cap100*0.67);
   document.getElementById(px+'-cap70').textContent = fmt(cap70);
+  document.getElementById('lbl-'+px+'-total').textContent = tasa ? 'Total actualizado (RIPTE + interés)' : 'Total actualizado (RIPTE)';
   document.getElementById(px+'-cap100').textContent = fmt(cap100);
 }
 
@@ -1014,19 +1025,24 @@ function calcArt55() {
   document.getElementById('ai-capact').textContent = fmt(capAct);
 
   var rowInt = document.getElementById('row-ai-int');
+  var totalIpc;
   if (tasaLibre) {
     var intereses = capAct * (tasaLibre/100/365 * dias);
-    var totalConInteres = capAct + intereses;
+    totalIpc = capAct + intereses;
     document.getElementById('lbl-ai-int').textContent = 'Intereses (' + fmtN(tasaLibre,2) + '% anual s/ cap. actualizado)';
     document.getElementById('ai-int').textContent = fmt(intereses);
     rowInt.style.display = '';
     document.getElementById('lbl-ai-total').textContent = 'Total actualizado (IPC + interés)';
-    document.getElementById('ai-total').textContent = fmt(totalConInteres);
+    document.getElementById('ai-total').textContent = fmt(totalIpc);
   } else {
     rowInt.style.display = 'none';
+    totalIpc = capAct;
     document.getElementById('lbl-ai-total').textContent = 'Total actualizado (IPC)';
-    document.getElementById('ai-total').textContent = fmt(capAct);
+    document.getElementById('ai-total').textContent = fmt(totalIpc);
   }
+
+  var cap70Ipc = ((totalIpc - capital) * 0.7) + capital;
+  document.getElementById('ai-cap70').textContent = fmt(cap70Ipc);
 
   // Helper para mostrar cada serie
   function mostrarSerie(pasiva, rowId, pasivaId, veredictoId, label) {
