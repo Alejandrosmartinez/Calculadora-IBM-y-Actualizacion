@@ -194,10 +194,18 @@ h1 { font-size: 18px; font-weight: 500; margin-bottom: 3px; }
         <div class="info-item">Tm Res.45/26: <b id="tp-tm">—</b></div>
       </div>
     </div>
-    <div class="card" id="ai-results" style="display:none">
-      <p class="section-label" id="ai-results-label">Resultado</p>
+    <div class="card" id="ai-results-basic" style="display:none">
+      <p class="section-label">Actualización por IPC</p>
       <div class="result-block">
-        <div class="result-row" id="row-ipc-tasa" style="display:none"><span id="lbl-ipc-tasa">IPC + tasa libre</span><span class="rval" id="ai-ipc-tasa">—</span></div>
+        <div class="result-row"><span>Capital</span><span class="rval" id="ai-cap-orig">—</span></div>
+        <div class="result-row"><span>Capital actualizado (IPC)</span><span class="rval" id="ai-capact">—</span></div>
+        <div class="result-row" id="row-ai-int" style="display:none"><span id="lbl-ai-int">Intereses</span><span class="rval" id="ai-int">—</span></div>
+        <div class="result-row total"><span id="lbl-ai-total">Total actualizado (IPC)</span><span class="rval" id="ai-total">—</span></div>
+      </div>
+    </div>
+    <div class="card" id="ai-results" style="display:none">
+      <p class="section-label">Art. 55 Ley 27.802 — Incisos (piso / techo / tasas pasivas)</p>
+      <div class="result-block">
         <div class="result-row" id="row-pasiva43"><span>Inc. a — Tasa pasiva Com. 14290 (CPACF / Justicia)</span><span class="rval" id="ai-pasiva43">—</span></div>
         <div class="result-row" id="row-pasiva12"><span>Inc. a — Tasa pasiva Res. 45/26 BCRA (Ley 27.802)</span><span class="rval" id="ai-pasiva12">—</span></div>
         <div class="result-row"><span>Inc. b — Techo (IPC + 3% anual s/ cap. actualizado)</span><span class="rval" id="ai-techo">—</span></div>
@@ -949,12 +957,12 @@ function calcArt55() {
   var lStr = document.getElementById('ai-liquidacion').value;
   var capital = parseMonto(document.getElementById('ai-capital').value);
 
-  if (!dStr || !lStr || !capital) { document.getElementById('ai-results').style.display='none'; return; }
+  if (!dStr || !lStr || !capital) { document.getElementById('ai-results').style.display='none'; document.getElementById('ai-results-basic').style.display='none'; return; }
 
   var dDate = parseLocalDate(dStr);
   var lDate = parseLocalDate(lStr);
   var dias = Math.round((lDate - dDate) / (1000*60*60*24));
-  if (dias <= 0) { document.getElementById('ai-results').style.display='none'; return; }
+  if (dias <= 0) { document.getElementById('ai-results').style.display='none'; document.getElementById('ai-results-basic').style.display='none'; return; }
 
   // IPC
   var dY = dDate.getFullYear(), dM = dDate.getMonth()+1;
@@ -985,7 +993,7 @@ function calcArt55() {
   document.getElementById('tp-t0').textContent = t12_0 != null ? fmtN(t12_0,4) : 'Sin dato';
   document.getElementById('tp-tm').textContent = t12_m != null ? fmtN(t12_m,4) : 'Sin dato';
 
-  if (!idxIpcD) { document.getElementById('ai-results').style.display='none'; return; }
+  if (!idxIpcD) { document.getElementById('ai-results').style.display='none'; document.getElementById('ai-results-basic').style.display='none'; return; }
 
   // Tasa libre opcional
   var tasaLibre = parseMonto(document.getElementById('ai-tasa-libre').value);
@@ -997,20 +1005,27 @@ function calcArt55() {
   var piso = techo * 0.67;
 
   document.getElementById('ai-results').style.display = 'block';
-  document.getElementById('ai-results-label').textContent = tasaLibre ? 'Resultado — IPC + tasa libre / Art. 55 Ley 27.802' : 'Resultado — Art. 55 Ley 27.802';
   document.getElementById('ai-techo').textContent = fmt(techo);
   document.getElementById('ai-piso').textContent = fmt(piso);
 
-  // Tasa libre: capital × coef_IPC × (1 + tasa/365 × días)
-  var rowTasaLibre = document.getElementById('row-ipc-tasa');
+  // ── Bloque básico: Capital / Capital actualizado (IPC) / Intereses / Total ──
+  document.getElementById('ai-results-basic').style.display = 'block';
+  document.getElementById('ai-cap-orig').textContent = fmt(capital);
+  document.getElementById('ai-capact').textContent = fmt(capAct);
+
+  var rowInt = document.getElementById('row-ai-int');
   if (tasaLibre) {
-    var resultadoTasaLibre = capAct * (1 + tasaLibre/100/365 * dias);
-    document.getElementById('lbl-ipc-tasa').textContent = 'IPC + ' + fmtN(tasaLibre,2) + '% anual s/ cap. actualizado';
-    document.getElementById('ai-ipc-tasa').textContent = fmt(resultadoTasaLibre);
-    rowTasaLibre.style.display = '';
-    rowTasaLibre.style.background = '#f1efe8';
+    var intereses = capAct * (tasaLibre/100/365 * dias);
+    var totalConInteres = capAct + intereses;
+    document.getElementById('lbl-ai-int').textContent = 'Intereses (' + fmtN(tasaLibre,2) + '% anual s/ cap. actualizado)';
+    document.getElementById('ai-int').textContent = fmt(intereses);
+    rowInt.style.display = '';
+    document.getElementById('lbl-ai-total').textContent = 'Total actualizado (IPC + interés)';
+    document.getElementById('ai-total').textContent = fmt(totalConInteres);
   } else {
-    rowTasaLibre.style.display = 'none';
+    rowInt.style.display = 'none';
+    document.getElementById('lbl-ai-total').textContent = 'Total actualizado (IPC)';
+    document.getElementById('ai-total').textContent = fmt(capAct);
   }
 
   // Helper para mostrar cada serie
